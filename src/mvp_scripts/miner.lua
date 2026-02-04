@@ -1,7 +1,5 @@
 local utils = require 'mp.utils'
 
-local is_first_hit_this_session = true
-
 local function miner_current_line()
     local text = mp.get_property("sub-text")
     local path = mp.get_property("path")
