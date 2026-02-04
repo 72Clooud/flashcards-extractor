@@ -1,0 +1,6 @@
+bin
+mining_queue.txt
+.env
+temp
+.venv
+__pycache__
