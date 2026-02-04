@@ -15,7 +15,18 @@ ANKI_URL = os.getenv("ANKI_URL")
 DECK_NAME = os.getenv("DECK_NAME")
 VIDEO_PATH = os.getenv("VIDEO_PATH")
 
-def parse_line(line: str):
+def clear_temp_folder(temp_folder: Path) -> None:
+    if temp_folder.exists() and temp_folder.is_dir():
+        for item in temp_folder.iterdir():
+            if item.is_file():
+                item.unlink()
+
+def clear_old_logs(log_file: Path) -> None:
+    if log_file.exists():
+        log_file.unlink()
+    log_file.touch()
+
+def parse_line(line: str) -> tuple[str, float, float, str]:
     parts = line.strip().split("|")
     if len(parts) != 4:
         raise ValueError("Invalid log line format")
@@ -54,6 +65,9 @@ def process_entry(line, anki_client: AnkiClient, media_processor: MediaProcessor
         print(f"Failed to add note for subtitle at start_time {start_time:.3f}s")
 
 def main():
+    clear_temp_folder(Path(PROJECT_ROOT) / "temp")
+    clear_old_logs(Path(LOG_FILE))
+    
     anki_client = AnkiClient(ANKI_URL)
     media_processor = MediaProcessor(FFMPEG_PATH, Path(PROJECT_ROOT) / "temp")
     translator = translator = Translator(source_lang="en", target_lang="pl")
@@ -67,9 +81,7 @@ def main():
 
         while True:
             line = f.readline()
-            print(line)
             if not line:
-                print("No new line, waiting...")
                 time.sleep(1)
                 continue
                 
