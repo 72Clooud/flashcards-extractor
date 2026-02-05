@@ -1,6 +1,8 @@
 import os
+import re
 import time
 from dotenv import load_dotenv
+from text_analyzer import TextAnalyzer
 from ffmpeg_handler import MediaProcessor
 from anki_handler import AnkiClient, AnkiNote, AnkiMedia
 from translator import Translator
@@ -32,24 +34,40 @@ def parse_line(line: str) -> tuple[str, float, float, str]:
         raise ValueError("Invalid log line format")
     return parts[0], float(parts[1]), float(parts[2]), parts[3] # path, start_time, end_time, subtitle_text
 
-def process_entry(line, anki_client: AnkiClient, media_processor: MediaProcessor, translator: Translator):
+def process_entry(line, anki_client: AnkiClient, media_processor: MediaProcessor, translator: Translator, text_analyzer: TextAnalyzer):
     data = parse_line(line)
     if not data:
         return
     video_path, start_time, end_time, subtitle_text = data
-    translation = translator.translate(subtitle_text)
+    full_translation_pl = translator.translate(subtitle_text)
 
+    phrase_en, phrase_pl = text_analyzer.get_phrase_pair(subtitle_text, full_translation_pl, translator)
+
+    highlighted_front = subtitle_text
+    highlighted_back = full_translation_pl
+
+    if phrase_en:
+        highlighted_front = text_analyzer.highlight_phrase(subtitle_text, phrase_en)
+    
+    if phrase_pl:
+        highlighted_back = text_analyzer.highlight_phrase(full_translation_pl, phrase_pl)
+    else:
+        doc_en = text_analyzer.nlp_en(subtitle_text)
+        rare_token = text_analyzer.find_rarest_word_token(doc_en)
+        if rare_token:
+             rare_pl = translator.translate(rare_token.text)
+             highlighted_back = text_analyzer.highlight_phrase(full_translation_pl, rare_pl)
     try:
         audio_path = media_processor.extract_audio(video_path, start_time, end_time)
     except Exception as e:
         print(f"FFmpeg failed : {e}")
         return
-    
+
     note = AnkiNote(
         deckName=os.getenv("DECK_NAME"),
         fields={
-            "Front": subtitle_text,
-            "Back": translation
+            "Front": highlighted_front,
+            "Back": highlighted_back
         },
         modelName="Basic",
         audio=[AnkiMedia(
@@ -68,6 +86,7 @@ def main():
     clear_temp_folder(Path(PROJECT_ROOT) / "temp")
     clear_old_logs(Path(LOG_FILE))
     
+    text_analyzer = TextAnalyzer()
     anki_client = AnkiClient(ANKI_URL)
     media_processor = MediaProcessor(FFMPEG_PATH, Path(PROJECT_ROOT) / "temp")
     translator = translator = Translator(source_lang="en", target_lang="pl")
@@ -86,7 +105,7 @@ def main():
                 continue
                 
 
-            process_entry(line, anki_client, media_processor, translator)
+            process_entry(line, anki_client, media_processor, translator, text_analyzer)
 
 if __name__ == "__main__":
     main()
